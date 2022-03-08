@@ -5,7 +5,7 @@ use rand::{Rng, thread_rng};
 use rand::rngs::ThreadRng;
 use ansi_term;
 use crate::State::{AiTurn, GameOver, PlayerTurn};
-use crate::WinCondition::Tie;
+use crate::WinCondition::{Ai, Player, Tie};
 
 fn get_line(msg : &str) -> io::Result<String> {
 
@@ -187,6 +187,59 @@ enum WinCondition {
     Ai,
 }
 
+fn check_win() -> i32 {
+
+    // Horizontal
+    for i in 0..3 {
+        let first = get_table((i * 3) + 0);
+
+        if first != get_table((i * 3) + 1) {
+            continue;
+        } else if first != get_table((i * 3) + 2) {
+            continue;
+        }
+
+        return first
+    }
+
+    // Vertical
+    for i in 0..3 {
+        let first = get_table(i);
+
+        if first != get_table(i + 3) {
+            continue;
+        } else if first != get_table(i + 6) {
+            continue;
+        }
+
+        return first;
+    }
+
+    // Diagonal Up-left / Down-right
+    {
+        let first = get_table(0);
+        let second = get_table(4);
+        let third = get_table(8);
+
+        if first == second && first == third {
+            return first;
+        }
+    }
+
+    // Diagonal Down-left / Up-right
+    {
+        let first = get_table(6);
+        let second = get_table(4);
+        let third = get_table(2);
+
+        if first == second && first == third {
+            return first;
+        }
+    }
+
+    return 0;
+}
+
 fn main() {
 
 /*    if WINDOWS {
@@ -220,12 +273,28 @@ fn main() {
                 println!("Enter the position.");
                 action = get_action();
                 if let Place(i) = &action {
-                    if get_table(*i as usize) != 0 {
-                        println!("Invalid position! Try again.");
+                    if *i < 0 || *i > 8 {
+                        println!(
+                            "{}",
+                            ansi_term::Colour::Red
+                                .bold()
+                                .paint("Invalid position! Pick a tile in bounds.")
+                        );
+                    } else if get_table(*i as usize) != 0 {
+                        println!(
+                            "{}",
+                            ansi_term::Colour::Red
+                                .bold()
+                                .paint("Invalid position! Try again.")
+                        );
                     } else {
                         set_table(*i as usize, player);
                         available_tiles -= 1;
-                        state = State::AiTurn;
+                        if check_win() == player {
+                            state = State::GameOver(Player);
+                        } else {
+                            state = State::AiTurn;
+                        }
                     }
                 }
             },
@@ -240,7 +309,11 @@ fn main() {
                 let tile = rnd.gen_range(0..(available.len()));
                 set_table(available[tile], ai);
                 available_tiles -= 1;
-                state = State::PlayerTurn;
+                if check_win() == ai {
+                    state = State::GameOver(Ai);
+                } else {
+                    state = State::PlayerTurn;
+                }
             },
             GameOver(condition) => {
                 match condition {
@@ -264,7 +337,11 @@ fn main() {
                     },
                 }
 
-                println!("Play Again? [Yes/No]");
+                println!(
+                    "Play Again? [{}/{}]",
+                    ansi_term::Colour::Green.paint("Yes"),
+                    ansi_term::Colour::Red.paint("No")
+                );
 
                 let action = get_action();
                 match action {
@@ -288,7 +365,13 @@ fn main() {
         }
 
         if available_tiles == 0 {
-            state = State::GameOver(Tie);
+            if check_win() == player {
+                state = State::GameOver(Player);
+            } else if check_win() == ai {
+                state = State::GameOver(Ai);
+            } else {
+                state = State::GameOver(Tie);
+            }
         }
 
         if let Quit = &action {
